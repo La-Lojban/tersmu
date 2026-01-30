@@ -278,6 +278,8 @@
         lucide.createIcons();
 
         let wasmInstance = null;
+        const STORAGE_KEY = 'tersmu-input';
+        const TEXT_LIMIT = 2000;
         
         async function loadWasm() {
 
@@ -447,6 +449,9 @@
                 
                 if (progressContainer) progressContainer.classList.add('hidden');
                 
+                // Restore content before triggering initial parse
+                restoreContent();
+
                 // Trigger parse if there's initial text
                 if (document.getElementById('lojban-input').value.trim()) {
                     handleParse();
@@ -475,6 +480,15 @@
             const input = document.getElementById('lojban-input');
             input.value = '';
             input.focus();
+            
+            // Sync with storage and URL
+            localStorage.setItem(STORAGE_KEY, '');
+            const url = new URL(window.location);
+            if (url.searchParams.has('q')) {
+                url.searchParams.delete('q');
+                window.history.replaceState({}, '', url);
+            }
+
             document.getElementById('results-area').classList.add('hidden');
             document.getElementById('parse-error').classList.add('hidden');
             document.getElementById('parse-loading').classList.add('hidden');
@@ -500,7 +514,20 @@
             const loading = document.getElementById('parse-loading');
             const errorArea = document.getElementById('parse-error');
             
-            if (!input || !wasmInstance || isParsing) return;
+            // Save to localStorage (capped at 2000 symbols)
+            localStorage.setItem(STORAGE_KEY, input.substring(0, TEXT_LIMIT));
+
+            if (!input || !wasmInstance || isParsing) {
+                // If input is empty, clear URL param
+                if (!input && wasmInstance) {
+                    const url = new URL(window.location);
+                    if (url.searchParams.has('q')) {
+                        url.searchParams.delete('q');
+                        window.history.replaceState({}, '', url);
+                    }
+                }
+                return;
+            }
             
             isParsing = true;
             
@@ -525,6 +552,13 @@
                     resultsArea.classList.remove('hidden');
                     if (isAuto) {
                         errorArea.classList.add('hidden');
+                    }
+
+                    // Reflect in URL if parse is successful
+                    const url = new URL(window.location);
+                    if (url.searchParams.get('q') !== input) {
+                        url.searchParams.set('q', input);
+                        window.history.replaceState({}, '', url);
                     }
                 }
             } catch (err) {
@@ -560,6 +594,29 @@
                 }, 2000);
             });
         }
+
+        function restoreContent() {
+            const params = new URLSearchParams(window.location.search);
+            const urlText = params.get('q');
+            const storedText = localStorage.getItem(STORAGE_KEY);
+            const input = document.getElementById('lojban-input');
+
+            if (urlText) {
+                input.value = urlText;
+            } else if (storedText) {
+                input.value = storedText;
+            }
+        }
+
+        window.addEventListener('popstate', () => {
+            const params = new URLSearchParams(window.location.search);
+            const urlText = params.get('q');
+            const input = document.getElementById('lojban-input');
+            if (urlText !== null && urlText !== input.value) {
+                input.value = urlText;
+                handleParse(true);
+            }
+        });
         
         // Load WASM on page load
         window.addEventListener('DOMContentLoaded', () => {
