@@ -1,2 +1,2 @@
-# moved to (https://lojban.github.io/tersmu/)
+# moved to https://lojban.github.io/tersmu/
 
